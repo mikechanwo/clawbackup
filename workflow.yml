@@ -1,0 +1,73 @@
+name: Polymarket Auto Trader
+
+on:
+  # Run every hour
+  schedule:
+    - cron: '0 * * * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+  
+  # Run on code push
+  push:
+    branches: [ main ]
+
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install py-clob-client python-dotenv aiohttp requests
+        
+    - name: Create environment file
+      run: |
+        cat > .env << 'ENVFILE'
+        # GitHub Secrets will be injected here
+        POLYMARKET_PRIVATE_KEY=${{ secrets.PRIVATE_KEY }}
+        POLYMARKET_WALLET_ADDRESS=${{ secrets.WALLET_ADDRESS }}
+        TARGET_TOKEN_ID=${{ secrets.TOKEN_ID }}
+        TRADING_MODE=${{ secrets.MODE || 'paper_live' }}
+        TRADE_SIZE=0.01
+        LOG_LEVEL=INFO
+        ENVFILE
+        
+    - name: Create contract addresses
+      run: |
+        cat > contracts.py << 'PYFILE'
+        # Polymarket Contract Addresses
+        CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
+        USDC_E = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+        CONDITIONAL_TOKENS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
+        PYFILE
+        
+    - name: Run trading bot
+      run: |
+        echo "🚀 Starting Polymarket Auto Trader..."
+        python bot.py
+        
+    - name: Save results
+      if: always()
+      run: |
+        echo "Run completed: $(date)" > result.txt
+        echo "Status: ${{ job.status }}" >> result.txt
+        
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: trading-logs
+        path: |
+          result.txt
+          *.log
+        retention-days: 7
